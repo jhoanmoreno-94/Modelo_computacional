@@ -7,6 +7,7 @@ import time
 
 URL = "https://normativa.udea.edu.co/Documentos/Consultar"
 
+# ------------------ Configuración Selenium ------------------
 options = webdriver.ChromeOptions()
 options.add_argument("--headless=new")
 options.add_argument("--window-size=1920,1080")
@@ -14,28 +15,45 @@ options.add_argument("--window-size=1920,1080")
 driver = webdriver.Chrome(options=options)
 wait = WebDriverWait(driver, 20)
 
+
+# ------------------ FUNCIÓN ACTUALIZADA (ANTI-STALE) ------------------
 def extraer_tabla(tipo_nombre):
     resultados = []
-    filas = driver.find_elements(By.CSS_SELECTOR, "#tblresultados tbody tr")
 
-    for fila in filas:
-        celdas = fila.find_elements(By.TAG_NAME, "td")
-        if len(celdas) < 6:
+    try:
+        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "#tblresultados tbody tr")))
+        filas = driver.find_elements(By.CSS_SELECTOR, "#tblresultados tbody tr")
+    except:
+        return resultados
+
+    for i in range(len(filas)):
+        try:
+            # Volvemos a buscar las filas en cada iteración (anti-stale)
+            filas = driver.find_elements(By.CSS_SELECTOR, "#tblresultados tbody tr")
+            fila = filas[i]
+
+            celdas = fila.find_elements(By.TAG_NAME, "td")
+
+            if len(celdas) < 6:
+                continue
+
+            resultados.append({
+                "tipo_documento": tipo_nombre,
+                "numero": celdas[0].text.strip(),
+                "fecha_expedicion": celdas[1].text.strip(),
+                "entrada_vigencia": celdas[2].text.strip(),
+                "medio_publicacion": celdas[3].text.strip(),
+                "resuelve": celdas[4].text.strip(),
+                "normas_relacionadas": celdas[5].text.strip(),
+            })
+
+        except:
             continue
-
-        resultados.append({
-            "tipo_documento": tipo_nombre,
-            "numero": celdas[0].text.strip(),
-            "fecha_expedicion": celdas[1].text.strip(),
-            "entrada_vigencia": celdas[2].text.strip(),
-            "medio_publicacion": celdas[3].text.strip(),
-            "resuelve": celdas[4].text.strip(),
-            "normas_relacionadas": celdas[5].text.strip(),
-        })
 
     return resultados
 
 
+# ------------------ Tipos de documento ------------------
 tipos = [
     ("01", "ACTAS"),
     ("02", "ACUERDOS"),
@@ -44,13 +62,14 @@ tipos = [
 
 datos_totales = []
 
+# ------------------ Bucle principal ------------------
 for valor, nombre in tipos:
     print(f"\n===== {nombre} =====")
 
     for anio in range(2004, 2025):
         print(f"Año: {anio}")
 
-        # Reiniciar página
+        # Reiniciar página cada año
         driver.get(URL)
 
         # Seleccionar tipo
@@ -102,8 +121,10 @@ for valor, nombre in tipos:
                 fila_ref = driver.find_element(By.CSS_SELECTOR, "#tblresultados tbody tr:first-child")
                 driver.execute_script(f"buscar({pagina});")
                 wait.until(EC.staleness_of(fila_ref))
-                time.sleep(1)
+                time.sleep(1.5)  # pequeña pausa adicional para estabilidad
+
                 datos_totales.extend(extraer_tabla(nombre))
+
             except:
                 print("      Error cambiando página")
                 break
@@ -111,6 +132,7 @@ for valor, nombre in tipos:
 
 driver.quit()
 
+# ------------------ Guardar Excel ------------------
 df = pd.DataFrame(datos_totales)
 df.to_excel("documentos_udea_2004_2024.xlsx", index=False)
 
