@@ -3,21 +3,17 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 import pandas as pd
+import time
 
-# ------------------ Configuración Selenium ------------------
+URL = "https://normativa.udea.edu.co/Documentos/Consultar"
+
 options = webdriver.ChromeOptions()
 options.add_argument("--headless=new")
-options.add_argument("--no-sandbox")
-options.add_argument("--disable-dev-shm-usage")
-options.add_argument("--disable-gpu")
 options.add_argument("--window-size=1920,1080")
 
 driver = webdriver.Chrome(options=options)
-driver.get("https://normativa.udea.edu.co/Documentos/Consultar")
+wait = WebDriverWait(driver, 20)
 
-wait = WebDriverWait(driver, 25)
-
-# ------------------ Función para extraer tabla ------------------
 def extraer_tabla(tipo_nombre):
     resultados = []
     filas = driver.find_elements(By.CSS_SELECTOR, "#tblresultados tbody tr")
@@ -27,7 +23,7 @@ def extraer_tabla(tipo_nombre):
         if len(celdas) < 6:
             continue
 
-        item = {
+        resultados.append({
             "tipo_documento": tipo_nombre,
             "numero": celdas[0].text.strip(),
             "fecha_expedicion": celdas[1].text.strip(),
@@ -35,14 +31,11 @@ def extraer_tabla(tipo_nombre):
             "medio_publicacion": celdas[3].text.strip(),
             "resuelve": celdas[4].text.strip(),
             "normas_relacionadas": celdas[5].text.strip(),
-        }
-
-        resultados.append(item)
+        })
 
     return resultados
 
 
-# ------------------ Tipos de documento ------------------
 tipos = [
     ("01", "ACTAS"),
     ("02", "ACUERDOS"),
@@ -51,63 +44,74 @@ tipos = [
 
 datos_totales = []
 
-# ------------------ Bucle principal ------------------
 for valor, nombre in tipos:
-    print(f"\n===== Procesando {nombre} =====")
+    print(f"\n===== {nombre} =====")
 
     for anio in range(2004, 2025):
-        print(f"  Año: {anio}")
+        print(f"Año: {anio}")
 
-        # Seleccionar tipo documento
+        # Reiniciar página
+        driver.get(URL)
+
+        # Seleccionar tipo
         select_element = wait.until(EC.presence_of_element_located((By.ID, "tipodocumento")))
-        select = Select(select_element)
-        select.select_by_value(valor)
+        Select(select_element).select_by_value(valor)
 
-        # Limpiar y escribir año en campo fecha
+        # Escribir año
         fecha_input = driver.find_element(By.ID, "fecha")
         fecha_input.clear()
         fecha_input.send_keys(str(anio))
 
-        # Click en buscar
-        btn = wait.until(EC.element_to_be_clickable((By.ID, "btnbuscar")))
-        btn.click()
+        # Buscar
+        driver.find_element(By.ID, "btnbuscar").click()
 
-        # Esperar resultados
         try:
             wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "#tblresultados tbody tr")))
         except:
-            print("    No hay resultados.")
+            print("   Sin resultados")
             continue
 
-        # -------- Recorrer páginas del año --------
-        pagina = 1
-        while True:
-            print(f"    Página {pagina}")
+        # Extraer primera página
+        datos_totales.extend(extraer_tabla(nombre))
 
-            datos_totales.extend(extraer_tabla(nombre))
+        # Detectar número de páginas
+        try:
+            paginacion = driver.find_elements(By.CSS_SELECTOR, ".pagination li a")
+            paginas = []
 
-            # Intentar ir a siguiente página
+            for p in paginacion:
+                texto = p.text.strip()
+                if texto.isdigit():
+                    paginas.append(int(texto))
+
+            max_pagina = max(paginas) if paginas else 1
+
+        except:
+            max_pagina = 1
+
+        print(f"   Total páginas detectadas: {max_pagina}")
+
+        # Límite de seguridad
+        max_pagina = min(max_pagina, 1500)
+
+        # Recorrer páginas restantes
+        for pagina in range(2, max_pagina + 1):
+            print(f"      Página {pagina}")
+
             try:
                 fila_ref = driver.find_element(By.CSS_SELECTOR, "#tblresultados tbody tr:first-child")
-                driver.execute_script(f"buscar({pagina + 1});")
+                driver.execute_script(f"buscar({pagina});")
                 wait.until(EC.staleness_of(fila_ref))
-                pagina += 1
+                time.sleep(1)
+                datos_totales.extend(extraer_tabla(nombre))
             except:
+                print("      Error cambiando página")
                 break
+
 
 driver.quit()
 
-# ------------------ Guardar Excel ------------------
-df = pd.DataFrame(datos_totales, columns=[
-    "tipo_documento",
-    "numero",
-    "fecha_expedicion",
-    "entrada_vigencia",
-    "medio_publicacion",
-    "resuelve",
-    "normas_relacionadas"
-])
-
+df = pd.DataFrame(datos_totales)
 df.to_excel("documentos_udea_2004_2024.xlsx", index=False)
 
-print(f"\n Total registros guardados: {len(df)}")
+print(f"\nTOTAL REGISTROS: {len(df)}")
