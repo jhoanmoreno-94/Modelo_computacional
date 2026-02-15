@@ -16,7 +16,7 @@ driver = webdriver.Chrome(options=options)
 wait = WebDriverWait(driver, 20)
 
 
-# ------------------ FUNCIÓN ACTUALIZADA (ANTI-STALE) ------------------
+# ------------------ FUNCIÓN ROBUSTA ANTI-STALE ------------------
 def extraer_tabla(tipo_nombre):
     resultados = []
 
@@ -28,10 +28,8 @@ def extraer_tabla(tipo_nombre):
 
     for i in range(len(filas)):
         try:
-            # Volvemos a buscar las filas en cada iteración (anti-stale)
             filas = driver.find_elements(By.CSS_SELECTOR, "#tblresultados tbody tr")
             fila = filas[i]
-
             celdas = fila.find_elements(By.TAG_NAME, "td")
 
             if len(celdas) < 6:
@@ -62,14 +60,14 @@ tipos = [
 
 datos_totales = []
 
-# ------------------ Bucle principal ------------------
+# ------------------ BUCLE PRINCIPAL ------------------
 for valor, nombre in tipos:
     print(f"\n===== {nombre} =====")
 
     for anio in range(2004, 2025):
         print(f"Año: {anio}")
 
-        # Reiniciar página cada año
+        # Reiniciar página
         driver.get(URL)
 
         # Seleccionar tipo
@@ -90,44 +88,40 @@ for valor, nombre in tipos:
             print("   Sin resultados")
             continue
 
-        # Extraer primera página
-        datos_totales.extend(extraer_tabla(nombre))
+        # ------------------ PAGINACIÓN INTELIGENTE ------------------
+        pagina = 1
 
-        # Detectar número de páginas
-        try:
-            paginacion = driver.find_elements(By.CSS_SELECTOR, ".pagination li a")
-            paginas = []
-
-            for p in paginacion:
-                texto = p.text.strip()
-                if texto.isdigit():
-                    paginas.append(int(texto))
-
-            max_pagina = max(paginas) if paginas else 1
-
-        except:
-            max_pagina = 1
-
-        print(f"   Total páginas detectadas: {max_pagina}")
-
-        # Límite de seguridad
-        max_pagina = min(max_pagina, 1500)
-
-        # Recorrer páginas restantes
-        for pagina in range(2, max_pagina + 1):
+        while True:
             print(f"      Página {pagina}")
 
+            datos_totales.extend(extraer_tabla(nombre))
+
+            # Guardar contenido actual
             try:
-                fila_ref = driver.find_element(By.CSS_SELECTOR, "#tblresultados tbody tr:first-child")
-                driver.execute_script(f"buscar({pagina});")
-                wait.until(EC.staleness_of(fila_ref))
-                time.sleep(1.5)  # pequeña pausa adicional para estabilidad
-
-                datos_totales.extend(extraer_tabla(nombre))
-
+                contenido_actual = driver.find_element(By.CSS_SELECTOR, "#tblresultados tbody").text
             except:
-                print("      Error cambiando página")
                 break
+
+            # Ir a siguiente página
+            try:
+                driver.execute_script(f"buscar({pagina + 1});")
+                time.sleep(1.5)
+                wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "#tblresultados tbody tr")))
+            except:
+                break
+
+            # Comparar contenido
+            try:
+                contenido_nuevo = driver.find_element(By.CSS_SELECTOR, "#tblresultados tbody").text
+            except:
+                break
+
+            # Si no cambia → última página
+            if contenido_actual == contenido_nuevo:
+                print("      Última página alcanzada")
+                break
+
+            pagina += 1
 
 
 driver.quit()
