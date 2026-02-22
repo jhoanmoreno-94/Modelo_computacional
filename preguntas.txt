@@ -1,0 +1,4 @@
+datos nulos:
+¿En "entrada_vigencia" y "medio_publicacion" podemos poner sin información?
+¿En "resuelve" podemos eliminar esos registros?
+¿En normas_relacionadas" los podemos poner sin información o dejarlos así, ya que una vez se habló de realizar grafos con esta columna?
