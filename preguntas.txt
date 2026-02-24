@@ -1,4 +1,5 @@
-datos nulos:
-¿En "entrada_vigencia" y "medio_publicacion" podemos poner sin información?
-¿En "resuelve" podemos eliminar esos registros?
-¿En normas_relacionadas" los podemos poner sin información o dejarlos así, ya que una vez se habló de realizar grafos con esta columna?
+datos nulos columnas:
+¿En "entrada_vigencia" y "medio_publicacion" podemos poner sin información? o la columna "entrada..." se debe poner formato fecha (0000-00-00)?
+¿En "resuelve" podemos eliminar esos registros? Está es la columna clave para la clasificación, entonces solo está se debe hacer la tokenización? 
+¿En normas_relacionadas" los podemos poner sin información o dejarlos así? ya que una vez se habló de realizar grafos con esta columna
+¿Qué técnica para realizar el proceso de clasificación me recomiendan: TF-IDF (Term Frequency - Inverse Document Frequency), similitud de consenso, clustering, Keyphrase Extraction Algorithm (KEA) y Keyword Extraction Based on Entropy Difference?
